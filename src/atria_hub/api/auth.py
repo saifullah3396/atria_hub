@@ -35,11 +35,11 @@ class AuthApi(BaseApi):
 
             self.sign_in(credentials=credentials)
 
-    def sign_in(self, credentials: AuthLoginModel | None = None):
+    def sign_in(self, credentials: AuthLoginModel):
         """Sign in the user."""
         try:
             result = self._client.auth_client.auth.sign_in_with_password(
-                credentials.model_dump()
+                credentials.model_dump()  # type: ignore
             )
             if not result.session or not result.user:
                 raise RuntimeError("Sign-in failed. Please check your credentials.")

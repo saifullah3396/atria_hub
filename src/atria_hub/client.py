@@ -20,12 +20,15 @@ class AtriaHubClient:
     def __init__(
         self,
         base_url: str = settings.ATRIAX_URL,
+        storage_url: str = settings.ATRIAX_STORAGE_URL,
         anon_api_key: str = settings.ATRIAX_ANON_KEY,
         service_name: str = "atria",
     ):
         self._base_url = base_url
+        self._storage_url = storage_url
         self._service_name = service_name
         self._anon_api_key = anon_api_key
+        self._auth_headers: dict[str, str] = {}
         self._credentials_storage = CredentialsStorage(service_name)
         self._api_client = AtriaxClient(base_url=base_url)
         self._auth_client: AuthClient = create_client(
@@ -33,9 +36,9 @@ class AtriaHubClient:
             supabase_key=anon_api_key,
             options=ClientOptions(storage=self._credentials_storage),
         )
-        self._repos_client = LakeFSClient(host=self._base_url + "/repos/v1")
+        self._repos_client = LakeFSClient(host=self._storage_url)
         self._repos_client._client._api.set_default_header("apiKey", self._anon_api_key)
-        self._lakefs_fs = LakeFSFileSystem(host=self._base_url + "/repos/v1")
+        self._lakefs_fs = LakeFSFileSystem(host=self._storage_url)
         self._lakefs_fs.client = self._repos_client
 
     @property
@@ -51,7 +54,9 @@ class AtriaHubClient:
     @property
     def protected_api_client(self) -> AtriaxClient:
         """Return the HTTP client for REST API calls."""
-        return self._api_client.with_headers(self._get_auth_headers())
+        return self._api_client.with_headers(
+            {"apiKey": self._anon_api_key, **self._auth_headers}
+        )
 
     @property
     def auth_client(self) -> SupabaseClient:
@@ -71,6 +76,10 @@ class AtriaHubClient:
         if self._lakefs_fs is None:
             raise RuntimeError("LakeFS client is not initialized.")
         return self._lakefs_fs
+
+    def set_auth_headers(self, auth_headers: dict[str, str]):
+        """Set the credentials in the storage."""
+        self._auth_headers = auth_headers
 
     def set_repos_access_credentials(self, credentials: ReposCredentials):
         """Set the credentials in the storage."""

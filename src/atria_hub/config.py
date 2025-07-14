@@ -2,13 +2,14 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    SERVICE_NAME = "atria"
+    SERVICE_NAME: str = "atria"
 
     ATRIAX_URL: str
+    ATRIAX_STORAGE_URL: str
     ATRIAX_ANON_KEY: str
 
-    LOG_FORMAT = "%(message)s"
-    DATE_FORMAT = "[%X]"
+    LOG_FORMAT: str = "%(message)s"
+    DATE_FORMAT: str = "[%X]"
 
     class Config:
         env_file = ".env"

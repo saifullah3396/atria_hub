@@ -15,13 +15,18 @@ class AtriaHub:
     def __init__(
         self,
         base_url: str = settings.ATRIAX_URL,
+        storage_url: str = settings.ATRIAX_STORAGE_URL,
         anon_api_key: str = settings.ATRIAX_ANON_KEY,
         credentials: AuthLoginModel | None = None,
         force_sign_in: bool = False,
         service_name: str = "atria",
     ):
+        self._base_url = base_url
         self._client = AtriaHubClient(
-            base_url=base_url, anon_api_key=anon_api_key, service_name=service_name
+            base_url=base_url,
+            storage_url=storage_url,
+            anon_api_key=anon_api_key,
+            service_name=service_name,
         )
         # initialize apis
         ## health check api
@@ -36,13 +41,32 @@ class AtriaHub:
 
         ## initialize repos api access and authenticate
         self._repo_credentials = RepoCredentialsApi(client=self._client)
-        self._client.set_repos_access_credentials(
-            self._repo_credentials.get_or_create()
-        )
 
         # initialize datasets repo api
         self._datasets = DatasetsApi(client=self._client)
         self._models = ModelsApi(client=self._client)
+
+        # initialize credentials
+        self._client.set_auth_headers(self.get_auth_headers())
+        self._storage_credentials = self._repo_credentials.get_or_create()
+        self._client.set_repos_access_credentials(self._storage_credentials)
+
+    def get_storage_options(self) -> dict[str, str]:
+        return {
+            "AWS_ACCESS_KEY_ID": self._storage_credentials.access_key_id,
+            "AWS_SECRET_ACCESS_KEY": self._storage_credentials.secret_access_key,
+            "AWS_ENDPOINT": self._base_url,
+            "AWS_REGION": "stub",
+            "AWS_ALLOW_HTTP": "true",
+            "AWS_S3_ALLOW_UNSAFE_RENAME": "true",
+        }
+
+    def get_auth_headers(self) -> dict[str, str]:
+        """Return headers using the Supabase session token."""
+        session = self._auth_api.get_session()
+        if not session:
+            raise RuntimeError("No active session. Please authenticate.")
+        return {"Authorization": f"Bearer {session.access_token}"}
 
     @property
     def client(self) -> AtriaHubClient:

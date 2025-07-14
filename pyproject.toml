@@ -18,6 +18,7 @@ dependencies = [
     "lakefs-spec>=0.11.4",
     "openapi-python-client>=0.25.2",
     "pydantic-settings>=2.10.1",
+    "pydantic[email]>=2.11.7",
     "supabase>=2.16.0",
     "tqdm>=4.67.1",
 ]
