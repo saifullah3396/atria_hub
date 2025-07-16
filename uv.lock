@@ -90,7 +90,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "atriax-client", directory = "../atriax_client" },
+    { name = "atriax-client", editable = "../atriax_client" },
     { name = "coverage", marker = "extra == 'test'" },
     { name = "gotrue", specifier = ">=2.12.3" },
     { name = "keyring", specifier = ">=25.6.0" },
@@ -118,7 +118,7 @@ dev = [
 [[package]]
 name = "atriax-client"
 version = "0.1.0"
-source = { directory = "../atriax_client" }
+source = { editable = "../atriax_client" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },

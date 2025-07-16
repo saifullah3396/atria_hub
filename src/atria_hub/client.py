@@ -1,9 +1,14 @@
+from atriax_client import AuthenticatedClient as AuthenticatedAtriaxClient
 from atriax_client import Client as AtriaxClient
 from lakefs.client import Client as LakeFSClient
 from lakefs_spec import LakeFSFileSystem
 from supabase import (
     Client as AuthClient,
+)
+from supabase import (
     Client as SupabaseClient,
+)
+from supabase import (
     ClientOptions,
     create_client,
 )
@@ -52,7 +57,7 @@ class AtriaHubClient:
         return self._api_client.with_headers({"apiKey": self._anon_api_key})
 
     @property
-    def protected_api_client(self) -> AtriaxClient:
+    def protected_api_client(self) -> AuthenticatedAtriaxClient:
         """Return the HTTP client for REST API calls."""
         return self._api_client.with_headers(
             {"apiKey": self._anon_api_key, **self._auth_headers}
