@@ -1,28 +1,51 @@
+import uuid
+from pathlib import Path
 from typing import Optional
 
+import lakefs
 import tqdm
-from atria_hub.api.base import BaseApi
+from atria_core.types.common import DatasetSplitType
 from atriax_client.models.body_dataset_create import BodyDatasetCreate
 from atriax_client.models.data_instance_type import DataInstanceType
 from atriax_client.models.dataset import Dataset
 
+from atria_hub.api.base import BaseApi
+from atria_hub.utilities import get_logger
+
+logger = get_logger(__name__)
+
 
 class DatasetsApi(BaseApi):
-    def get(self, name: str):
+    def get(self, id: uuid.UUID) -> Dataset:
+        """Retrieve a dataset from the hub by its name."""
+        from atriax_client.api.dataset import dataset_item
+
+        with self._client.protected_api_client as client:
+            response = dataset_item.sync_detailed(id, client=client)
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Failed to get dataset: {response.status_code} - {response.content.decode('utf-8')}"
+                )
+            return response.parsed
+
+    def get_by_name(self, username: str, name: str):
         """Retrieve a dataset from the hub by its name."""
         from atriax_client.api.dataset import dataset_find_one
 
         with self._client.protected_api_client as client:
-            response = dataset_find_one.sync_detailed(client=client, name=name)
+            response = dataset_find_one.sync_detailed(
+                client=client, username=username, name=name
+            )
             if response.status_code != 200:
                 raise RuntimeError(
-                    f"Failed to create dataset: {response.status_code} - {response.content.decode('utf-8')}"
+                    f"Failed to get dataset: {response.status_code} - {response.content.decode('utf-8')}"
                 )
             return response.parsed
 
     def create(
         self,
         name: str,
+        default_branch: str = "main",
         description: str | None = None,
         data_instance_type: Optional["DataInstanceType"] = None,
         is_public: bool = False,
@@ -37,6 +60,7 @@ class DatasetsApi(BaseApi):
                     name=name,
                     description=description,
                     data_instance_type=data_instance_type,
+                    default_branch=default_branch,
                     is_public=is_public,
                 ),
             )
@@ -48,17 +72,20 @@ class DatasetsApi(BaseApi):
 
     def get_or_create(
         self,
+        username: str,
         name: str,
+        default_branch: str = "main",
         description: str | None = None,
         data_instance_type: Optional["DataInstanceType"] = None,
         is_public: bool = False,
     ) -> Dataset:
         """Get or create a dataset in the hub."""
         try:
-            return self.get(name=name)
+            return self.get_by_name(username=username, name=name)
         except Exception:
             return self.create(
                 name=name,
+                default_branch=default_branch,
                 description=description,
                 data_instance_type=data_instance_type,
                 is_public=is_public,
@@ -67,11 +94,18 @@ class DatasetsApi(BaseApi):
     def upload_files(
         self, dataset: Dataset, branch: str, dataset_files: list[tuple[str, str]]
     ) -> None:
+        branch: lakefs.Branch = (
+            lakefs.repository(dataset.repo_id, client=self._client.lakefs_client)
+            .branch(branch)
+            .create(source_reference=dataset.default_branch, exist_ok=True)
+        ).id
+
         # get target repository path
+        self._client.fs.source_branch = branch
         tgt = f"{dataset.repo_id}/{branch}/"
 
         # first verify that delta directory already does not exist
-        dir_ls = self._client.fs.ls(tgt)
+        dir_ls = self._client.fs.ls(tgt, refresh=True)
         if f"{tgt}delta/" in [x["name"] for x in dir_ls]:
             raise RuntimeError(
                 f"This dataset already contains uploaded files in branch '{branch}'. "
@@ -79,16 +113,101 @@ class DatasetsApi(BaseApi):
             )
 
         # iterate over the dataset files and upload them to the hub
-        for file in tqdm.tqdm(dataset_files, desc="Uploading dataset files to hub"):
+        logger.info(
+            f"Uploading {len(dataset_files)} files to dataset {dataset.name} in branch {branch}..."
+        )
+        for file in tqdm.tqdm(dataset_files, desc="Uploading"):
             src, file_tgt = file
 
             # this is slow but for now it works, in future we could use s3 gateway with async boto3 client instead
             self._client.fs.put_file(lpath=src, rpath=f"{tgt}{file_tgt}")
 
     def download_files(
-        self, dataset: Dataset, branch: str, destination_path: str
+        self, dataset_repo_id: str, branch: str, destination_path: str
     ) -> None:
         """Download files from a dataset."""
-        src = f"{dataset.repo_id}/{branch}/"
+        src = f"{dataset_repo_id}/{branch}/"
         tgt = destination_path
         self._client.fs.get(src, tgt, recursive=True)
+
+    def get_splits(self, dataset_repo_id: str, branch: str) -> list[DatasetSplitType]:
+        # get target repository path
+        tgt = f"{dataset_repo_id}/{branch}/delta/"
+
+        # first verify that delta directory already does not exist
+        dir_ls = self._client.fs.ls(tgt)
+        return [
+            DatasetSplitType(Path(x["name"]).name)
+            for x in dir_ls
+            if Path(x["name"]).name in DatasetSplitType.__members__
+        ]
+
+    def get_config(self, dataset_repo_id: str, branch: str) -> dict:
+        import yaml
+
+        branch: lakefs.Branch = lakefs.repository(
+            dataset_repo_id, client=self._client.lakefs_client
+        ).branch(branch)
+        with branch.object("conf/dataset/config.yaml").reader(pre_sign=True) as f:
+            config = yaml.safe_load(f.read().decode("utf-8"))
+        if not isinstance(config, dict):
+            raise ValueError(
+                "The model configuration is not a valid dictionary. "
+                "Please ensure the model was saved with the configuration."
+            )
+        return config
+
+    def get_metadata(self, dataset_repo_id: str, branch: str) -> dict:
+        import yaml
+
+        branch: lakefs.Branch = lakefs.repository(
+            dataset_repo_id, client=self._client.lakefs_client
+        ).branch(branch)
+        with branch.object("metadata.yaml").reader(pre_sign=True) as f:
+            config = yaml.safe_load(f.read().decode("utf-8"))
+        if not isinstance(config, dict):
+            raise ValueError(
+                "The dataset metadata is not a valid dictionary. "
+                "Please ensure the dataset was saved with the metadata."
+            )
+        return config
+
+    def read_dataset_info(self, dataset_repo_id: str, branch: str) -> tuple[dict, dict]:
+        """Read dataset info from the hub."""
+        config = self.get_config(dataset_repo_id, branch)
+        metadata = self.get_metadata(dataset_repo_id, branch)
+        return config, metadata
+
+    def dataset_table_path(self, dataset_repo_id: str, branch: str, split: str) -> str:
+        return f"lakefs://{dataset_repo_id}/{branch}/delta/{split}/"
+
+    def eval_table_path(
+        self,
+        dataset_repo_id: str,
+        eval_branch: str,
+        split: str,
+        model_path: str,
+        task_type: str,
+    ) -> str:
+        return f"lakefs://{dataset_repo_id}/{eval_branch}/eval/split-{split}/{model_path}/{task_type}"
+
+    def get_or_create_eval_branch(
+        self, dataset_repo_id: str, dataset_branch: str
+    ) -> str:
+        commit_sha = self.get_commit_sha(dataset_repo_id, dataset_branch)
+        eval_branch = f"eval-{dataset_branch}-{commit_sha[:7]}"
+        lakefs.repository(dataset_repo_id, client=self._client.lakefs_client).branch(
+            eval_branch
+        ).create(source_reference=dataset_branch, exist_ok=True)
+        return eval_branch
+
+    def delete(self, dataset: Dataset) -> None:
+        """Delete a dataset from the hub."""
+        from atriax_client.api.dataset import dataset_delete
+
+        with self._client.protected_api_client as client:
+            response = dataset_delete.sync_detailed(client=client, id=dataset.id)
+            if response.status_code != 200:
+                raise RuntimeError(
+                    f"Failed to delete dataset: {response.status_code} - {response.content.decode('utf-8')}"
+                )

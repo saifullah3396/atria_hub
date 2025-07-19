@@ -17,17 +17,17 @@ class AtriaHub:
         base_url: str = settings.ATRIAX_URL,
         storage_url: str = settings.ATRIAX_STORAGE_URL,
         anon_api_key: str = settings.ATRIAX_ANON_KEY,
-        credentials: AuthLoginModel | None = None,
-        force_sign_in: bool = False,
         service_name: str = "atria",
     ):
         self._base_url = base_url
+        self._storage_url = storage_url
         self._client = AtriaHubClient(
             base_url=base_url,
             storage_url=storage_url,
             anon_api_key=anon_api_key,
             service_name=service_name,
         )
+
         # initialize apis
         ## health check api
         self._health_check_api = HealthCheckApi(client=self._client)
@@ -35,27 +35,38 @@ class AtriaHub:
 
         ## auth api
         self._auth_api = AuthApi(client=self._client)
-        self._auth_api.initialize_auth(
-            credentials=credentials, force_sign_in=force_sign_in
-        )
 
-        ## initialize repos api access and authenticate
-        self._repo_credentials = RepoCredentialsApi(client=self._client)
-
-        # initialize datasets repo api
+        ## initialize datasets repo api
         self._datasets = DatasetsApi(client=self._client)
         self._models = ModelsApi(client=self._client)
 
-        # initialize credentials
+        ## initialize repo credentials api
+        self._repo_credentials = RepoCredentialsApi(client=self._client)
+
+    def initialize(
+        self, credentials: AuthLoginModel | None = None, force_sign_in: bool = False
+    ) -> "AtriaHub":
+        """Initialize the AtriaHub client and authenticate."""
+        try:
+            self._health_check_api.health_check()
+        except RuntimeError:
+            logger.error("AtriaHub is unreachable. Please check your connection.")
+            raise
+        self._auth_api.initialize_auth(
+            email=credentials.email if credentials is not None else None,
+            password=credentials.password if credentials is not None else None,
+            force_sign_in=force_sign_in,
+        )
         self._client.set_auth_headers(self.get_auth_headers())
         self._storage_credentials = self._repo_credentials.get_or_create()
         self._client.set_repos_access_credentials(self._storage_credentials)
+        return self
 
     def get_storage_options(self) -> dict[str, str]:
         return {
             "AWS_ACCESS_KEY_ID": self._storage_credentials.access_key_id,
             "AWS_SECRET_ACCESS_KEY": self._storage_credentials.secret_access_key,
-            "AWS_ENDPOINT": self._base_url,
+            "AWS_ENDPOINT": self._storage_url,
             "AWS_REGION": "stub",
             "AWS_ALLOW_HTTP": "true",
             "AWS_S3_ALLOW_UNSAFE_RENAME": "true",

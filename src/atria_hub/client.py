@@ -1,14 +1,12 @@
-from atriax_client import AuthenticatedClient as AuthenticatedAtriaxClient
-from atriax_client import Client as AtriaxClient
+from atriax_client import (
+    AuthenticatedClient as AuthenticatedAtriaxClient,
+    Client as AtriaxClient,
+)
 from lakefs.client import Client as LakeFSClient
 from lakefs_spec import LakeFSFileSystem
 from supabase import (
     Client as AuthClient,
-)
-from supabase import (
     Client as SupabaseClient,
-)
-from supabase import (
     ClientOptions,
     create_client,
 )
