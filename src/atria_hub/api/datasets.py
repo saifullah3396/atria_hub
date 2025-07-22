@@ -5,12 +5,11 @@ from typing import Optional
 import lakefs
 import tqdm
 from atria_core.types.common import DatasetSplitType
+from atria_hub.api.base import BaseApi
+from atria_hub.utilities import get_logger
 from atriax_client.models.body_dataset_create import BodyDatasetCreate
 from atriax_client.models.data_instance_type import DataInstanceType
 from atriax_client.models.dataset import Dataset
-
-from atria_hub.api.base import BaseApi
-from atria_hub.utilities import get_logger
 
 logger = get_logger(__name__)
 
@@ -104,23 +103,15 @@ class DatasetsApi(BaseApi):
         self._client.fs.source_branch = branch
         tgt = f"{dataset.repo_id}/{branch}/"
 
-        # first verify that delta directory already does not exist
-        dir_ls = self._client.fs.ls(tgt, refresh=True)
-        if f"{tgt}delta/" in [x["name"] for x in dir_ls]:
-            raise RuntimeError(
-                f"This dataset already contains uploaded files in branch '{branch}'. "
-                "Please use a different branch name or delete the existing files."
-            )
-
         # iterate over the dataset files and upload them to the hub
         logger.info(
-            f"Uploading {len(dataset_files)} files to dataset {dataset.name} in branch {branch}..."
+            f"Uploading {len(dataset_files)} files to dataset {dataset.name} in repo/branch {dataset.repo_id}{branch}..."
         )
         for file in tqdm.tqdm(dataset_files, desc="Uploading"):
             src, file_tgt = file
 
             # this is slow but for now it works, in future we could use s3 gateway with async boto3 client instead
-            self._client.fs.put_file(lpath=src, rpath=f"{tgt}{file_tgt}")
+            self._client.fs.put_file(lpath=src, rpath=f"{tgt}{file_tgt}", precheck=True)
 
     def download_files(
         self, dataset_repo_id: str, branch: str, destination_path: str
