@@ -1,17 +1,22 @@
-import uuid
+from __future__ import annotations
 
-import lakefs
-import yaml
-from atriax_client.models.body_model_create import BodyModelCreate
-from atriax_client.models.model import Model
-from atriax_client.models.task_type import TaskType
+from typing import TYPE_CHECKING
 
 from atria_hub.api.base import BaseApi
+
+if TYPE_CHECKING:
+    import uuid
+
+    import yaml
+    from atriax_client.models.body_model_create import BodyModelCreate
+    from atriax_client.models.model import Model
+    from atriax_client.models.task_type import TaskType
 
 
 class ModelsApi(BaseApi):
     def get(self, id: uuid.UUID) -> Model:
         """Retrieve a model from the hub by its name."""
+
         from atriax_client.api.model import model_item
 
         with self._client.protected_api_client as client:
@@ -24,6 +29,7 @@ class ModelsApi(BaseApi):
 
     def get_by_name(self, username: str, name: str):
         """Retrieve a model from the hub by its name."""
+
         from atriax_client.api.model import model_find_one
 
         with self._client.protected_api_client as client:
@@ -38,6 +44,7 @@ class ModelsApi(BaseApi):
 
     def create(self, body: BodyModelCreate):
         """Create a new model in the hub."""
+
         from atriax_client.api.model import model_create
 
         with self._client.protected_api_client as client:
@@ -57,6 +64,9 @@ class ModelsApi(BaseApi):
         is_public: bool = False,
     ) -> Model:
         """Get or create a model in the hub."""
+
+        from atriax_client.models.body_model_create import BodyModelCreate
+
         try:
             return self.get_by_name(username=username, name=name)
         except Exception:
@@ -71,7 +81,9 @@ class ModelsApi(BaseApi):
 
     def upload_checkpoint(
         self, model: Model, branch: str, model_checkpoint: bytes, model_config: dict
-    ) -> "Model":
+    ) -> Model:
+        import lakefs
+
         branch: lakefs.Branch = lakefs.repository(
             model.repo_id, client=self._client.lakefs_client
         ).branch(branch)
@@ -84,6 +96,8 @@ class ModelsApi(BaseApi):
     def load_checkpoint_and_config(
         self, model_repo_id: str, branch: str
     ) -> tuple[bytes, dict]:
+        import lakefs
+
         """Download files from a model."""
         branch: lakefs.Branch = lakefs.repository(
             model_repo_id, client=self._client.lakefs_client

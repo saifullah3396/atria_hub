@@ -1,7 +1,6 @@
-from gotrue.types import User
-
 from atria_hub.api.base import BaseApi
 from atria_hub.utilities import get_logger
+from gotrue.types import User
 
 logger = get_logger(__name__)
 
@@ -37,6 +36,13 @@ class AuthApi(BaseApi):
     ):
         """Authenticate user and store the session."""
         session = self.get_session()
+        if session and email is not None and password is not None:
+            if session.user.email == email:
+                logger.info(f"Already signed in as {email}")
+                return
+            else:
+                force_sign_in = True
+
         if not session or force_sign_in:
             if email is None or password is None:
                 email = input("Enter your email: ")
@@ -72,5 +78,12 @@ class AuthApi(BaseApi):
 
     def sign_out(self):
         """Sign out the user by removing the session."""
+        session = self.get_session()
+        if not session:
+            logger.warning("No active session to sign out from.")
+            return
         self._client.auth_client.auth.sign_out()
-        logger.info("Signed out successfully")
+        logger.info(
+            "Successfully signed out for user: %s",
+            session.user.email if session else "Unknown",
+        )

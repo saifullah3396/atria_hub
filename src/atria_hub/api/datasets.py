@@ -1,22 +1,35 @@
-import uuid
-from pathlib import Path
-from typing import Optional
+from __future__ import annotations
 
-import lakefs
-import tqdm
-from atria_core.types.common import DatasetSplitType
+from typing import TYPE_CHECKING
+
 from atria_hub.api.base import BaseApi
 from atria_hub.utilities import get_logger
-from atriax_client.models.body_dataset_create import BodyDatasetCreate
-from atriax_client.models.data_instance_type import DataInstanceType
-from atriax_client.models.dataset import Dataset
+
+if TYPE_CHECKING:
+    import uuid
+
+    from atria_core.types.common import DatasetSplitType
+    from atria_hub.api.base import BaseApi
+    from atria_hub.utilities import get_logger
+    from atriax_client.models.data_instance_type import DataInstanceType
+    from atriax_client.models.dataset import Dataset
 
 logger = get_logger(__name__)
+
+
+class DatasetNotFoundError(Exception):
+    """Exception raised when a dataset is not found in the hub."""
+
+    def __init__(self, username: str, name: str):
+        super().__init__(f"Dataset {username}/{name} not found in the hub.")
+        self.username = username
+        self.name = name
 
 
 class DatasetsApi(BaseApi):
     def get(self, id: uuid.UUID) -> Dataset:
         """Retrieve a dataset from the hub by its name."""
+
         from atriax_client.api.dataset import dataset_item
 
         with self._client.protected_api_client as client:
@@ -29,6 +42,7 @@ class DatasetsApi(BaseApi):
 
     def get_by_name(self, username: str, name: str):
         """Retrieve a dataset from the hub by its name."""
+
         from atriax_client.api.dataset import dataset_find_one
 
         with self._client.protected_api_client as client:
@@ -39,6 +53,8 @@ class DatasetsApi(BaseApi):
                 raise RuntimeError(
                     f"Failed to get dataset: {response.status_code} - {response.content.decode('utf-8')}"
                 )
+            if response.status_code == 404:
+                raise DatasetNotFoundError(username=username, name=name)
             return response.parsed
 
     def create(
@@ -46,11 +62,13 @@ class DatasetsApi(BaseApi):
         name: str,
         default_branch: str = "main",
         description: str | None = None,
-        data_instance_type: Optional["DataInstanceType"] = None,
+        data_instance_type: DataInstanceType | None = None,
         is_public: bool = False,
     ):
         """Create a new dataset in the hub."""
+
         from atriax_client.api.dataset import dataset_create
+        from atriax_client.models.body_dataset_create import BodyDatasetCreate
 
         with self._client.protected_api_client as client:
             response = dataset_create.sync_detailed(
@@ -75,10 +93,11 @@ class DatasetsApi(BaseApi):
         name: str,
         default_branch: str = "main",
         description: str | None = None,
-        data_instance_type: Optional["DataInstanceType"] = None,
+        data_instance_type: DataInstanceType | None = None,
         is_public: bool = False,
     ) -> Dataset:
         """Get or create a dataset in the hub."""
+
         try:
             return self.get_by_name(username=username, name=name)
         except Exception:
@@ -91,8 +110,16 @@ class DatasetsApi(BaseApi):
             )
 
     def upload_files(
-        self, dataset: Dataset, branch: str, dataset_files: list[tuple[str, str]]
+        self,
+        dataset: Dataset,
+        branch: str,
+        config_dir: str,
+        dataset_files: list[tuple[str, str]],
+        overwrite_existing: bool = False,
     ) -> None:
+        import lakefs
+        import tqdm
+
         branch: lakefs.Branch = (
             lakefs.repository(dataset.repo_id, client=self._client.lakefs_client)
             .branch(branch)
@@ -103,9 +130,22 @@ class DatasetsApi(BaseApi):
         self._client.fs.source_branch = branch
         tgt = f"{dataset.repo_id}/{branch}/"
 
+        # first verify that delta directory already does not exist
+        deltadir = f"{tgt}{config_dir}/delta/"
+        if self._client.fs.exists(deltadir) and not overwrite_existing:
+            raise RuntimeError(
+                f"Delta directory {deltadir} already exists. Please choose a different branch or delete the existing directory."
+            )
+
         # iterate over the dataset files and upload them to the hub
         logger.info(
-            f"Uploading {len(dataset_files)} files to dataset {dataset.name} in repo/branch {dataset.repo_id}{branch}..."
+            f"Uploading {len(dataset_files)} files to dataset {dataset.name} in repo/branch {dataset.name}/{branch}..."
+        )
+        # Log a preview of files to be uploaded
+        from rich.pretty import pretty_repr
+
+        logger.info(
+            f"Files to be uploaded:\n{pretty_repr(dataset_files, max_length=4)}"
         )
         for file in tqdm.tqdm(dataset_files, desc="Uploading"):
             src, file_tgt = file
@@ -114,16 +154,24 @@ class DatasetsApi(BaseApi):
             self._client.fs.put_file(lpath=src, rpath=f"{tgt}{file_tgt}", precheck=True)
 
     def download_files(
-        self, dataset_repo_id: str, branch: str, destination_path: str
+        self, dataset_repo_id: str, branch: str, config_dir: str, destination_path: str
     ) -> None:
         """Download files from a dataset."""
-        src = f"{dataset_repo_id}/{branch}/"
-        tgt = destination_path
+        from pathlib import Path
+
+        src = f"{dataset_repo_id}/{branch}/{config_dir}/"
+        tgt = str(Path(destination_path) / config_dir)
         self._client.fs.get(src, tgt, recursive=True)
 
-    def get_splits(self, dataset_repo_id: str, branch: str) -> list[DatasetSplitType]:
+    def get_splits(
+        self, dataset_repo_id: str, branch: str, config_name: str
+    ) -> list[DatasetSplitType]:
+        from pathlib import Path
+
+        from atria_core.types.common import DatasetSplitType
+
         # get target repository path
-        tgt = f"{dataset_repo_id}/{branch}/delta/"
+        tgt = f"{dataset_repo_id}/{branch}/{config_name}/delta/"
 
         # first verify that delta directory already does not exist
         dir_ls = self._client.fs.ls(tgt)
@@ -134,6 +182,7 @@ class DatasetsApi(BaseApi):
         ]
 
     def get_config(self, dataset_repo_id: str, branch: str) -> dict:
+        import lakefs
         import yaml
 
         branch: lakefs.Branch = lakefs.repository(
@@ -149,6 +198,7 @@ class DatasetsApi(BaseApi):
         return config
 
     def get_metadata(self, dataset_repo_id: str, branch: str) -> dict:
+        import lakefs
         import yaml
 
         branch: lakefs.Branch = lakefs.repository(
@@ -165,12 +215,15 @@ class DatasetsApi(BaseApi):
 
     def read_dataset_info(self, dataset_repo_id: str, branch: str) -> tuple[dict, dict]:
         """Read dataset info from the hub."""
+
         config = self.get_config(dataset_repo_id, branch)
         metadata = self.get_metadata(dataset_repo_id, branch)
         return config, metadata
 
-    def dataset_table_path(self, dataset_repo_id: str, branch: str, split: str) -> str:
-        return f"lakefs://{dataset_repo_id}/{branch}/delta/{split}/"
+    def dataset_table_path(
+        self, dataset_repo_id: str, branch: str, config_name: str, split: str
+    ) -> str:
+        return f"lakefs://{dataset_repo_id}/{branch}/{config_name}/delta/{split}/"
 
     def eval_table_path(
         self,
@@ -185,6 +238,8 @@ class DatasetsApi(BaseApi):
     def get_or_create_eval_branch(
         self, dataset_repo_id: str, dataset_branch: str
     ) -> str:
+        import lakefs
+
         commit_sha = self.get_commit_sha(dataset_repo_id, dataset_branch)
         eval_branch = f"eval-{dataset_branch}-{commit_sha[:7]}"
         lakefs.repository(dataset_repo_id, client=self._client.lakefs_client).branch(
@@ -194,6 +249,7 @@ class DatasetsApi(BaseApi):
 
     def delete(self, dataset: Dataset) -> None:
         """Delete a dataset from the hub."""
+
         from atriax_client.api.dataset import dataset_delete
 
         with self._client.protected_api_client as client:

@@ -1,20 +1,24 @@
-from atriax_client import (
-    AuthenticatedClient as AuthenticatedAtriaxClient,
-    Client as AtriaxClient,
-)
-from lakefs.client import Client as LakeFSClient
-from lakefs_spec import LakeFSFileSystem
-from supabase import (
-    Client as AuthClient,
-    Client as SupabaseClient,
-    ClientOptions,
-    create_client,
-)
+from __future__ import annotations
+
+from functools import cached_property
+from typing import TYPE_CHECKING
 
 from atria_hub.config import settings
-from atria_hub.credentials_storage import CredentialsStorage
-from atria_hub.models import ReposCredentials
 from atria_hub.utilities import get_logger
+
+if TYPE_CHECKING:
+    from atriax_client import (
+        AuthenticatedClient as AuthenticatedAtriaxClient,
+    )
+    from atriax_client import (
+        Client as AtriaxClient,
+    )
+    from lakefs.client import Client as LakeFSClient
+    from lakefs_spec import LakeFSFileSystem
+    from supabase import Client as SupabaseClient
+
+    from atria_hub.credentials_storage import CredentialsStorage
+    from atria_hub.models import ReposCredentials
 
 logger = get_logger(__name__)
 
@@ -27,6 +31,12 @@ class AtriaHubClient:
         anon_api_key: str = settings.ATRIAX_ANON_KEY,
         service_name: str = "atria",
     ):
+        from atriax_client import Client as AtriaxClient
+        from supabase import Client as AuthClient
+        from supabase import ClientOptions, create_client
+
+        from atria_hub.credentials_storage import CredentialsStorage
+
         self._base_url = base_url
         self._storage_url = storage_url
         self._service_name = service_name
@@ -39,10 +49,8 @@ class AtriaHubClient:
             supabase_key=anon_api_key,
             options=ClientOptions(storage=self._credentials_storage),
         )
-        self._repos_client = LakeFSClient(host=self._storage_url)
-        self._repos_client._client._api.set_default_header("apiKey", self._anon_api_key)
-        self._lakefs_fs = LakeFSFileSystem(host=self._storage_url)
-        self._lakefs_fs.client = self._repos_client
+        self._lakefs_client: LakeFSClient | None = None
+        self._lakefs_fs: LakeFSFileSystem | None = None
 
     @property
     def credentials_storage(self) -> CredentialsStorage:
@@ -66,18 +74,26 @@ class AtriaHubClient:
         """Return the Supabase client."""
         return self._auth_client
 
-    @property
+    @cached_property
     def lakefs_client(self) -> LakeFSClient:
         """Return the LakeFS client."""
-        if self._repos_client is None:
-            raise RuntimeError("LakeFS client is not initialized.")
-        return self._repos_client
+        from lakefs.client import Client as LakeFSClient
 
-    @property
+        if self._lakefs_client is None:
+            self._lakefs_client = LakeFSClient(host=self._storage_url)
+            self._lakefs_client._client._api.set_default_header(
+                "apiKey", self._anon_api_key
+            )
+        return self._lakefs_client
+
+    @cached_property
     def fs(self) -> LakeFSFileSystem:
         """Return the LakeFS client."""
+        from lakefs_spec import LakeFSFileSystem
+
         if self._lakefs_fs is None:
-            raise RuntimeError("LakeFS client is not initialized.")
+            self._lakefs_fs = LakeFSFileSystem(host=self._storage_url)
+            self._lakefs_fs.client = self._lakefs_client
         return self._lakefs_fs
 
     def set_auth_headers(self, auth_headers: dict[str, str]):
@@ -86,5 +102,5 @@ class AtriaHubClient:
 
     def set_repos_access_credentials(self, credentials: ReposCredentials):
         """Set the credentials in the storage."""
-        self._repos_client._conf.username = credentials.access_key_id
-        self._repos_client._conf.password = credentials.secret_access_key
+        self.lakefs_client._conf.username = credentials.access_key_id
+        self.lakefs_client._conf.password = credentials.secret_access_key

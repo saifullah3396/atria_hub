@@ -1,12 +1,17 @@
-from atria_hub.api.auth import AuthApi
-from atria_hub.api.credentials import RepoCredentialsApi
-from atria_hub.api.datasets import DatasetsApi
-from atria_hub.api.health_check import HealthCheckApi
-from atria_hub.api.models import ModelsApi
-from atria_hub.client import AtriaHubClient
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from atria_hub.config import settings
 from atria_hub.models import AuthLoginModel
 from atria_hub.utilities import get_logger
+
+if TYPE_CHECKING:
+    from atria_hub.api.auth import AuthApi
+    from atria_hub.api.datasets import DatasetsApi
+    from atria_hub.api.health_check import HealthCheckApi
+    from atria_hub.api.models import ModelsApi
+    from atria_hub.client import AtriaHubClient
 
 logger = get_logger(__name__)
 
@@ -19,6 +24,13 @@ class AtriaHub:
         anon_api_key: str = settings.ATRIAX_ANON_KEY,
         service_name: str = "atria",
     ):
+        from atria_hub.api.auth import AuthApi
+        from atria_hub.api.credentials import RepoCredentialsApi
+        from atria_hub.api.datasets import DatasetsApi
+        from atria_hub.api.health_check import HealthCheckApi
+        from atria_hub.api.models import ModelsApi
+        from atria_hub.client import AtriaHubClient
+
         self._base_url = base_url
         self._storage_url = storage_url
         self._client = AtriaHubClient(
