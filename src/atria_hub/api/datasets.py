@@ -159,9 +159,20 @@ class DatasetsApi(BaseApi):
         """Download files from a dataset."""
         from pathlib import Path
 
+        from fsspec.callbacks import TqdmCallback
+
         src = f"{dataset_repo_id}/{branch}/{config_dir}/"
         tgt = str(Path(destination_path) / config_dir)
-        self._client.fs.get(src, tgt, recursive=True)
+        self._client.fs.get(
+            src,
+            tgt,
+            recursive=True,
+            callback=TqdmCallback(
+                tqdm_kwargs={
+                    "desc": "Downloading files",
+                }
+            ),
+        )
 
     def get_splits(
         self, dataset_repo_id: str, branch: str, config_name: str
@@ -181,19 +192,29 @@ class DatasetsApi(BaseApi):
             if Path(x["name"]).name in DatasetSplitType.__members__
         ]
 
-    def get_config(self, dataset_repo_id: str, branch: str) -> dict:
+    def get_config(self, dataset_repo_id: str, branch: str, config_name: str) -> dict:
+        from pathlib import Path
+
         import lakefs
         import yaml
 
+        # list all configs in the branch
+        dir_ls = self._client.fs.ls(f"{dataset_repo_id}/{branch}/conf/dataset/")
+        if not any(Path(x["name"]).name == f"{config_name}.yaml" for x in dir_ls):
+            raise RuntimeError(
+                f"Configuration '{config_name}' not found in the dataset on branch {branch}."
+                f"Available configurations: {[Path(x['name']).name.replace('.yaml', '') for x in dir_ls]}"
+            )
         branch: lakefs.Branch = lakefs.repository(
             dataset_repo_id, client=self._client.lakefs_client
         ).branch(branch)
-        with branch.object("conf/dataset/config.yaml").reader(pre_sign=True) as f:
+        with branch.object(f"conf/dataset/{config_name}.yaml").reader(
+            pre_sign=True
+        ) as f:
             config = yaml.safe_load(f.read().decode("utf-8"))
         if not isinstance(config, dict):
-            raise ValueError(
-                "The model configuration is not a valid dictionary. "
-                "Please ensure the model was saved with the configuration."
+            raise RuntimeError(
+                f"The dataset configuration {config_name} is not a valid dictionary. "
             )
         return config
 
