@@ -192,6 +192,17 @@ class DatasetsApi(BaseApi):
             if Path(x["name"]).name in DatasetSplitType.__members__
         ]
 
+    def get_available_configs(
+        self,
+        dataset_repo_id: str,
+        branch: str,
+    ) -> bool:
+        """Check if a configuration exists in the dataset."""
+        from pathlib import Path
+
+        dir_ls = self._client.fs.ls(f"{dataset_repo_id}/{branch}/conf/dataset/")
+        return [Path(x["name"]).name.replace(".yaml", "") for x in dir_ls]
+
     def get_config(self, dataset_repo_id: str, branch: str, config_name: str) -> dict:
         from pathlib import Path
 
