@@ -7,7 +7,6 @@ from atria_hub.api.base import BaseApi
 if TYPE_CHECKING:
     import uuid
 
-    import yaml
     from atriax_client.models.body_model_create import BodyModelCreate
     from atriax_client.models.model import Model
     from atriax_client.models.task_type import TaskType
@@ -60,6 +59,7 @@ class ModelsApi(BaseApi):
         username: str,
         name: str,
         task_type: TaskType,
+        default_branch: str = "main",
         description: str | None = None,
         is_public: bool = False,
     ) -> Model:
@@ -74,37 +74,76 @@ class ModelsApi(BaseApi):
                 body=BodyModelCreate(
                     name=name,
                     task_type=task_type,
+                    default_branch=default_branch,
                     description=description,
                     is_public=is_public,
                 )
             )
 
-    def upload_checkpoint(
-        self, model: Model, branch: str, model_checkpoint: bytes, model_config: dict
+    def upload_files(
+        self,
+        model: Model,
+        branch: str,
+        config_name: str,
+        configs_base_path: str,
+        model_checkpoint: bytes,
+        model_config: dict,
+        overwrite_existing: bool = False,
     ) -> Model:
         import lakefs
+        import yaml
 
+        branch: lakefs.Branch = (
+            lakefs.repository(model.repo_id, client=self._client.lakefs_client)
+            .branch(branch)
+            .create(source_reference=model.default_branch, exist_ok=True)
+        ).id
+
+        # get target repository path
+        self._client.fs.source_branch = branch
+        tgt = f"{model.repo_id}/{branch}/"
+
+        # first verify that model already does not exist
+        model_dir = f"{tgt}{config_name}/"
+        if self._client.fs.exists(model_dir) and not overwrite_existing:
+            raise RuntimeError(
+                f"Model {model_dir} already exists. "
+                f"Either choose a different branch or set overwrite_existing=True to overwrite. "
+                f"to overwrite the dataset."
+            )
         branch: lakefs.Branch = lakefs.repository(
             model.repo_id, client=self._client.lakefs_client
         ).branch(branch)
         branch.create(model.default_branch, exist_ok=True)
-        branch.object("model.pt").upload(model_checkpoint)
-        branch.object("conf/model/config.yaml").upload(
+        branch.object(f"{config_name}/model.bin").upload(model_checkpoint)
+        branch.object(f"{configs_base_path}/{config_name}.yaml").upload(
             yaml.dump(model_config).encode("utf-8")
         )
 
+    def get_available_configs(
+        self, dataset_repo_id: str, branch: str, configs_base_path: str
+    ) -> bool:
+        """Check if a configuration exists in the dataset."""
+        from pathlib import Path
+
+        dir_ls = self._client.fs.ls(f"{dataset_repo_id}/{branch}/{configs_base_path}/")
+        return [Path(x["name"]).name.replace(".yaml", "") for x in dir_ls]
+
     def load_checkpoint_and_config(
-        self, model_repo_id: str, branch: str
+        self, model_repo_id: str, branch: str, config_name: str, configs_base_path: str
     ) -> tuple[bytes, dict]:
         import lakefs
+        import yaml
 
         """Download files from a model."""
         branch: lakefs.Branch = lakefs.repository(
             model_repo_id, client=self._client.lakefs_client
         ).branch(branch)
-        with branch.object("model.pt").reader(pre_sign=True) as f:
+        with branch.object(f"{config_name}/model.bin").reader(pre_sign=True) as f:
             model = f.read()
-        with branch.object("conf/model/config.yaml").reader(pre_sign=True) as f:
+        with branch.object(f"{configs_base_path}/{config_name}.yaml").reader(
+            pre_sign=True
+        ) as f:
             config = yaml.safe_load(f.read().decode("utf-8"))
         if not isinstance(config, dict):
             raise ValueError(

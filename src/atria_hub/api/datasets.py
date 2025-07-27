@@ -9,10 +9,11 @@ if TYPE_CHECKING:
     import uuid
 
     from atria_core.types.common import DatasetSplitType
-    from atria_hub.api.base import BaseApi
-    from atria_hub.utilities import get_logger
     from atriax_client.models.data_instance_type import DataInstanceType
     from atriax_client.models.dataset import Dataset
+
+    from atria_hub.api.base import BaseApi
+    from atria_hub.utilities import get_logger
 
 logger = get_logger(__name__)
 
@@ -134,7 +135,9 @@ class DatasetsApi(BaseApi):
         deltadir = f"{tgt}{config_dir}/delta/"
         if self._client.fs.exists(deltadir) and not overwrite_existing:
             raise RuntimeError(
-                f"Delta directory {deltadir} already exists. Please choose a different branch or delete the existing directory."
+                f"Delta directory {deltadir} already exists. "
+                f"Either choose a different branch or set overwrite_existing=True to overwrite. "
+                f"to overwrite the dataset."
             )
 
         # iterate over the dataset files and upload them to the hub
@@ -167,11 +170,7 @@ class DatasetsApi(BaseApi):
             src,
             tgt,
             recursive=True,
-            callback=TqdmCallback(
-                tqdm_kwargs={
-                    "desc": "Downloading files",
-                }
-            ),
+            callback=TqdmCallback(tqdm_kwargs={"desc": "Downloading files"}),
         )
 
     def get_splits(
@@ -192,11 +191,7 @@ class DatasetsApi(BaseApi):
             if Path(x["name"]).name in DatasetSplitType.__members__
         ]
 
-    def get_available_configs(
-        self,
-        dataset_repo_id: str,
-        branch: str,
-    ) -> bool:
+    def get_available_configs(self, dataset_repo_id: str, branch: str) -> bool:
         """Check if a configuration exists in the dataset."""
         from pathlib import Path
 
