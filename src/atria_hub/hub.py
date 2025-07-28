@@ -23,6 +23,7 @@ class AtriaHub:
         storage_url: str = settings.ATRIAX_STORAGE_URL,
         anon_api_key: str = settings.ATRIAX_ANON_KEY,
         service_name: str = "atria",
+        use_key_ring: bool = True,
     ):
         from atria_hub.api.auth import AuthApi
         from atria_hub.api.credentials import RepoCredentialsApi
@@ -38,6 +39,7 @@ class AtriaHub:
             storage_url=storage_url,
             anon_api_key=anon_api_key,
             service_name=service_name,
+            use_key_ring=use_key_ring,
         )
 
         # initialize apis

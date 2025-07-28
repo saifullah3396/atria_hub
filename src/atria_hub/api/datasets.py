@@ -9,11 +9,10 @@ if TYPE_CHECKING:
     import uuid
 
     from atria_core.types.common import DatasetSplitType
-    from atriax_client.models.data_instance_type import DataInstanceType
-    from atriax_client.models.dataset import Dataset
-
     from atria_hub.api.base import BaseApi
     from atria_hub.utilities import get_logger
+    from atriax_client.models.data_instance_type import DataInstanceType
+    from atriax_client.models.dataset import Dataset
 
 logger = get_logger(__name__)
 
@@ -252,16 +251,6 @@ class DatasetsApi(BaseApi):
     ) -> str:
         return f"lakefs://{dataset_repo_id}/{branch}/{config_name}/delta/{split}/"
 
-    def eval_table_path(
-        self,
-        dataset_repo_id: str,
-        eval_branch: str,
-        split: str,
-        model_path: str,
-        task_type: str,
-    ) -> str:
-        return f"lakefs://{dataset_repo_id}/{eval_branch}/eval/split-{split}/{model_path}/{task_type}"
-
     def get_or_create_eval_branch(
         self, dataset_repo_id: str, dataset_branch: str
     ) -> str:
@@ -273,6 +262,55 @@ class DatasetsApi(BaseApi):
             eval_branch
         ).create(source_reference=dataset_branch, exist_ok=True)
         return eval_branch
+
+    def eval_table_path(
+        self,
+        dataset_repo_id: str,
+        eval_branch: str,
+        split: str,
+        output_path: str,
+    ) -> str:
+        return f"lakefs://{dataset_repo_id}/{eval_branch}/split-{split}/model-{output_path}"
+
+    def write_eval_metrics(
+        self,
+        dataset_repo_id: str,
+        eval_branch: str,
+        split: str,
+        output_path: str,
+        data: dict,
+    ) -> str:
+        import json
+
+        import lakefs
+        from lakefs.branch import Branch
+
+        eval_branch: Branch = lakefs.repository(
+            dataset_repo_id, client=self._client.lakefs_client
+        ).branch(eval_branch)
+        eval_branch.object(f"split-{split}/model-{output_path}/metrics.json").upload(
+            json.dumps(data).encode("utf-8")
+        )
+
+    def read_eval_metrics(
+        self,
+        dataset_repo_id: str,
+        eval_branch: str,
+        split: str,
+        output_path: str,
+    ) -> str:
+        import lakefs
+        from lakefs.branch import Branch
+
+        eval_branch: Branch = lakefs.repository(
+            dataset_repo_id, client=self._client.lakefs_client
+        ).branch(eval_branch)
+        path = f"split-{split}/model-{output_path}/metrics.json"
+        if eval_branch.object(path).exists():
+            with eval_branch.object(
+                f"split-{split}/model-{output_path}/metrics.json"
+            ).reader(pre_sign=True) as f:
+                return f.read().decode("utf-8")
 
     def delete(self, dataset: Dataset) -> None:
         """Delete a dataset from the hub."""

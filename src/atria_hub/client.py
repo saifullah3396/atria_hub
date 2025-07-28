@@ -30,6 +30,7 @@ class AtriaHubClient:
         storage_url: str = settings.ATRIAX_STORAGE_URL,
         anon_api_key: str = settings.ATRIAX_ANON_KEY,
         service_name: str = "atria",
+        use_key_ring: bool = True,
     ):
         from atriax_client import Client as AtriaxClient
         from supabase import Client as AuthClient
@@ -47,7 +48,9 @@ class AtriaHubClient:
         self._auth_client: AuthClient = create_client(
             supabase_url=base_url,
             supabase_key=anon_api_key,
-            options=ClientOptions(storage=self._credentials_storage),
+            options=ClientOptions(storage=self._credentials_storage)
+            if use_key_ring
+            else None,
         )
         self._lakefs_client: LakeFSClient | None = None
         self._lakefs_fs: LakeFSFileSystem | None = None

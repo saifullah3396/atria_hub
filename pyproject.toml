@@ -107,12 +107,6 @@ xfail_strict = true         # Treat tests that are marked as xfail but pass as t
 
 [tool.uv]
 managed = true
-conflicts = [
-  [
-    { extra = "torch-cpu" },
-    { extra = "torch-gpu" },
-  ],
-]
 
 [tool.uv.sources]
 atriax-client = { path = "../atriax_client", editable = true }

@@ -117,7 +117,7 @@ class ModelsApi(BaseApi):
         branch.create(model.default_branch, exist_ok=True)
         branch.object(f"{config_name}/model.bin").upload(model_checkpoint)
         branch.object(f"{configs_base_path}/{config_name}.yaml").upload(
-            yaml.dump(model_config).encode("utf-8")
+            yaml.dump(model_config, sort_keys=False).encode("utf-8")
         )
 
     def get_available_configs(
