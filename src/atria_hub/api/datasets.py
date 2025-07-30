@@ -246,6 +246,23 @@ class DatasetsApi(BaseApi):
         metadata = self.get_metadata(dataset_repo_id, branch)
         return config, metadata
 
+    def commit_changes(self, dataset_repo_id: str, branch: str, message: str) -> None:
+        """Commit changes to the dataset."""
+        import lakefs
+        from lakefs.branch import Branch
+
+        branch: Branch = lakefs.repository(
+            dataset_repo_id, client=self._client.lakefs_client
+        ).branch(branch)
+        uncommitted_changes = list(branch.uncommitted())
+        if len(uncommitted_changes) == 0:
+            return
+        return (
+            lakefs.repository(dataset_repo_id, client=self._client.lakefs_client)
+            .branch(branch)
+            .commit(message=message)
+        )
+
     def dataset_table_path(
         self, dataset_repo_id: str, branch: str, config_name: str, split: str
     ) -> str:
@@ -270,7 +287,7 @@ class DatasetsApi(BaseApi):
         split: str,
         output_path: str,
     ) -> str:
-        return f"lakefs://{dataset_repo_id}/{eval_branch}/split-{split}/model-{output_path}"
+        return f"lakefs://{dataset_repo_id}/{eval_branch}/split-{split}/{output_path}"
 
     def write_eval_metrics(
         self,
