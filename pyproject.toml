@@ -109,7 +109,7 @@ xfail_strict = true         # Treat tests that are marked as xfail but pass as t
 managed = true
 
 [tool.uv.sources]
-atriax-client = { path = "../atriax_client", editable = true }
+atriax-client = { path = "https://github.com/saifullah3396/atriax_client" }
 
 [dependency-groups]
 dev = [
