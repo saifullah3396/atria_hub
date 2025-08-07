@@ -114,7 +114,7 @@ dev = [
 [[package]]
 name = "atriax-client"
 version = "0.1.0"
-source = { git = "https://github.com/saifullah3396/atriax_client.git#967c7d44ae2dd04e041a96eca42f04b6d74d56e2" }
+source = { git = "https://github.com/saifullah3396/atriax_client.git#35b184ce89f79fab82077bc86f36338cd5f46a09" }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
