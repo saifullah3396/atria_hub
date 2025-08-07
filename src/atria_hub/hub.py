@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from atria_hub.api.tasks import TasksApi
 from atria_hub.config import settings
 from atria_hub.models import AuthLoginModel
 from atria_hub.utilities import get_logger
@@ -57,9 +58,12 @@ class AtriaHub:
         ## initialize repo credentials api
         self._repo_credentials = RepoCredentialsApi(client=self._client)
 
+        # tasks api
+        self._tasks = TasksApi(client=self._client)
+
     def initialize(
         self, credentials: AuthLoginModel | None = None, force_sign_in: bool = False
-    ) -> "AtriaHub":
+    ) -> AtriaHub:
         """Initialize the AtriaHub client and authenticate."""
         try:
             self._health_check_api.health_check()
@@ -117,3 +121,8 @@ class AtriaHub:
     def models(self) -> ModelsApi:
         """Return the models API."""
         return self._models
+
+    @property
+    def tasks(self) -> TasksApi:
+        """Return the tasks API."""
+        return self._tasks

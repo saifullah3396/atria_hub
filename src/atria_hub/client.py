@@ -9,8 +9,6 @@ from atria_hub.utilities import get_logger
 if TYPE_CHECKING:
     from atriax_client import (
         AuthenticatedClient as AuthenticatedAtriaxClient,
-    )
-    from atriax_client import (
         Client as AtriaxClient,
     )
     from lakefs.client import Client as LakeFSClient
@@ -33,8 +31,7 @@ class AtriaHubClient:
         use_key_ring: bool = True,
     ):
         from atriax_client import Client as AtriaxClient
-        from supabase import Client as AuthClient
-        from supabase import ClientOptions, create_client
+        from supabase import Client as AuthClient, ClientOptions, create_client
 
         from atria_hub.credentials_storage import CredentialsStorage
 
