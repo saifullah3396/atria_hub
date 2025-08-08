@@ -357,7 +357,12 @@ class DatasetsApi(BaseApi):
         return eval_metrics_path
 
     def read_eval_metrics(
-        self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
+        self,
+        dataset_repo_id: str,
+        eval_branch: str,
+        config_name: str,
+        split: str,
+        output_path: str,
     ) -> tuple[str, dict]:
         import lakefs
         from lakefs.branch import Branch
@@ -370,6 +375,7 @@ class DatasetsApi(BaseApi):
             dataset_repo_id=dataset_repo_id,
             eval_branch=eval_branch.id,
             split=split,
+            config_name=config_name,
             output_path=output_path,
         )
 
