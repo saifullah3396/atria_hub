@@ -278,9 +278,14 @@ class DatasetsApi(BaseApi):
         return eval_branch
 
     def eval_base_path(
-        self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
+        self,
+        dataset_repo_id: str,
+        eval_branch: str,
+        config_name: str,
+        split: str,
+        output_path: str,
     ):
-        return f"lakefs://{dataset_repo_id}/{eval_branch}/split-{split}/{output_path}"
+        return f"lakefs://{dataset_repo_id}/{eval_branch}/{config_name}/eval/{split}/{output_path}"
 
     def eval_table_path(
         self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
