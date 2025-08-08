@@ -280,14 +280,36 @@ class DatasetsApi(BaseApi):
         ).create(source_reference=dataset_branch, exist_ok=True)
         return eval_branch
 
-    def eval_table_path(
-        self,
-        dataset_repo_id: str,
-        eval_branch: str,
-        split: str,
-        output_path: str,
-    ) -> str:
+    def eval_base_path(
+        self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
+    ):
         return f"lakefs://{dataset_repo_id}/{eval_branch}/split-{split}/{output_path}"
+
+    def eval_table_path(
+        self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
+    ) -> str:
+        return (
+            self.eval_base_path(
+                dataset_repo_id=dataset_repo_id,
+                eval_branch=eval_branch,
+                split=split,
+                output_path=output_path,
+            )
+            + "/delta"
+        )
+
+    def eval_metrics_path(
+        self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
+    ) -> str:
+        return (
+            self.eval_base_path(
+                dataset_repo_id=dataset_repo_id,
+                eval_branch=eval_branch,
+                split=split,
+                output_path=output_path,
+            )
+            + "/metrics.json"
+        )
 
     def write_eval_metrics(
         self,
@@ -305,16 +327,16 @@ class DatasetsApi(BaseApi):
         eval_branch: Branch = lakefs.repository(
             dataset_repo_id, client=self._client.lakefs_client
         ).branch(eval_branch)
-        eval_branch.object(f"split-{split}/model-{output_path}/metrics.json").upload(
-            json.dumps(data).encode("utf-8")
+        eval_metrics_path = self.eval_metrics_path(
+            dataset_repo_id=dataset_repo_id,
+            eval_branch=eval_branch.id,
+            split=split,
+            output_path=output_path,
         )
+        eval_branch.object(eval_metrics_path).upload(json.dumps(data).encode("utf-8"))
 
     def read_eval_metrics(
-        self,
-        dataset_repo_id: str,
-        eval_branch: str,
-        split: str,
-        output_path: str,
+        self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
     ) -> str:
         import lakefs
         from lakefs.branch import Branch
@@ -322,12 +344,19 @@ class DatasetsApi(BaseApi):
         eval_branch: Branch = lakefs.repository(
             dataset_repo_id, client=self._client.lakefs_client
         ).branch(eval_branch)
-        path = f"split-{split}/model-{output_path}/metrics.json"
-        if eval_branch.object(path).exists():
-            with eval_branch.object(
-                f"split-{split}/model-{output_path}/metrics.json"
-            ).reader(pre_sign=True) as f:
-                return f.read().decode("utf-8")
+
+        eval_metrics_path = self.eval_metrics_path(
+            dataset_repo_id=dataset_repo_id,
+            eval_branch=eval_branch.id,
+            split=split,
+            output_path=output_path,
+        )
+
+        if not eval_branch.object(eval_metrics_path).exists():
+            return
+
+        with eval_branch.object(eval_metrics_path).reader(pre_sign=True) as f:
+            return f.read().decode("utf-8")
 
     def delete(self, dataset: Dataset) -> None:
         """Delete a dataset from the hub."""
