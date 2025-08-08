@@ -329,6 +329,7 @@ class DatasetsApi(BaseApi):
         self,
         dataset_repo_id: str,
         eval_branch: str,
+        config_name: str,
         split: str,
         output_path: str,
         data: dict,
@@ -344,6 +345,7 @@ class DatasetsApi(BaseApi):
         eval_metrics_path = self.eval_metrics_path(
             dataset_repo_id=dataset_repo_id,
             eval_branch=eval_branch.id,
+            config_name=config_name,
             split=split,
             output_path=output_path,
         )
@@ -352,10 +354,11 @@ class DatasetsApi(BaseApi):
             message=f"Write evaluation metrics for {dataset_repo_id} on {eval_branch.id} for split {split}",
             paths=[eval_metrics_path],
         )
+        return eval_metrics_path
 
     def read_eval_metrics(
         self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
-    ) -> str:
+    ) -> tuple[str, dict]:
         import lakefs
         from lakefs.branch import Branch
 
@@ -371,10 +374,10 @@ class DatasetsApi(BaseApi):
         )
 
         if not eval_branch.object(eval_metrics_path).exists():
-            return
+            return None, {}
 
         with eval_branch.object(eval_metrics_path).reader(pre_sign=True) as f:
-            return f.read().decode("utf-8")
+            return eval_metrics_path, f.read().decode("utf-8")
 
     def delete(self, dataset: Dataset) -> None:
         """Delete a dataset from the hub."""
