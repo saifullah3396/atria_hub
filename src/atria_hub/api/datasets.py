@@ -258,11 +258,7 @@ class DatasetsApi(BaseApi):
         uncommitted_changes = list(branch.uncommitted())
         if len(uncommitted_changes) == 0:
             return
-        return (
-            lakefs.repository(dataset_repo_id, client=self._client.lakefs_client)
-            .branch(branch)
-            .commit(message=message)
-        )
+        return branch.commit(message=message)
 
     def dataset_table_path(
         self, dataset_repo_id: str, branch: str, config_name: str, split: str
