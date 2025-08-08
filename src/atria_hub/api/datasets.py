@@ -9,10 +9,11 @@ if TYPE_CHECKING:
     import uuid
 
     from atria_core.types.common import DatasetSplitType
-    from atria_hub.api.base import BaseApi
-    from atria_hub.utilities import get_logger
     from atriax_client.models.data_instance_type import DataInstanceType
     from atriax_client.models.dataset import Dataset
+
+    from atria_hub.api.base import BaseApi
+    from atria_hub.utilities import get_logger
 
 logger = get_logger(__name__)
 
@@ -334,6 +335,10 @@ class DatasetsApi(BaseApi):
             output_path=output_path,
         )
         eval_branch.object(eval_metrics_path).upload(json.dumps(data).encode("utf-8"))
+        eval_branch.commit(
+            message=f"Write evaluation metrics for {dataset_repo_id} on {eval_branch.id} for split {split}",
+            paths=[eval_metrics_path],
+        )
 
     def read_eval_metrics(
         self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
