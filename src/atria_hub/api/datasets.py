@@ -288,26 +288,38 @@ class DatasetsApi(BaseApi):
         return f"lakefs://{dataset_repo_id}/{eval_branch}/{config_name}/eval/{split}/{output_path}"
 
     def eval_table_path(
-        self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
+        self,
+        dataset_repo_id: str,
+        eval_branch: str,
+        config_name: str,
+        split: str,
+        output_path: str,
     ) -> str:
         return (
             self.eval_base_path(
                 dataset_repo_id=dataset_repo_id,
                 eval_branch=eval_branch,
                 split=split,
+                config_name=config_name,
                 output_path=output_path,
             )
             + "/delta"
         )
 
     def eval_metrics_path(
-        self, dataset_repo_id: str, eval_branch: str, split: str, output_path: str
+        self,
+        dataset_repo_id: str,
+        eval_branch: str,
+        config_name: str,
+        split: str,
+        output_path: str,
     ) -> str:
         return (
             self.eval_base_path(
                 dataset_repo_id=dataset_repo_id,
                 eval_branch=eval_branch,
                 split=split,
+                config_name=config_name,
                 output_path=output_path,
             )
             + "/metrics.json"
