@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from atria_hub.api.evaluations import EvaluationsApi
 from atria_hub.api.tasks import TasksApi
 from atria_hub.config import settings
 from atria_hub.models import AuthLoginModel
@@ -46,7 +47,6 @@ class AtriaHub:
         # initialize apis
         ## health check api
         self._health_check_api = HealthCheckApi(client=self._client)
-        self._health_check_api.health_check()
 
         ## auth api
         self._auth_api = AuthApi(client=self._client)
@@ -61,6 +61,9 @@ class AtriaHub:
         # tasks api
         self._tasks = TasksApi(client=self._client)
 
+        # evaluation APIs
+        self._evaluations = EvaluationsApi(client=self._client)
+
     def initialize(
         self, credentials: AuthLoginModel | None = None, force_sign_in: bool = False
     ) -> AtriaHub:
@@ -68,7 +71,10 @@ class AtriaHub:
         try:
             self._health_check_api.health_check()
         except RuntimeError:
-            logger.error("AtriaHub is unreachable. Please check your connection.")
+            logger.error(
+                "AtriaHub is unreachable at %s. Please check your connection.",
+                self._base_url,
+            )
             raise
         self._auth_api.initialize_auth(
             email=credentials.email if credentials is not None else None,
@@ -126,3 +132,8 @@ class AtriaHub:
     def tasks(self) -> TasksApi:
         """Return the tasks API."""
         return self._tasks
+
+    @property
+    def evaluations(self) -> EvaluationsApi:
+        """Return the evaluations API."""
+        return self._evaluations

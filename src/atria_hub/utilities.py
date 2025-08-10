@@ -4,9 +4,8 @@ from atria_hub.config import settings
 
 
 def get_logger(name: str) -> logging.Logger:
-    logger = (
-        logging.getLogger(name) if name else logging.getLogger(settings.SERVICE_NAME)
-    )
+    from atria_core.logger import get_logger
+    logger = get_logger(name)
 
     logging.basicConfig(
         level=logging.INFO, format=settings.LOG_FORMAT, datefmt=settings.DATE_FORMAT

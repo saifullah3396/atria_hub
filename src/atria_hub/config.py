@@ -1,3 +1,4 @@
+from atria_core.utilities.imports import _get_package_base_path
 from pydantic_settings import BaseSettings
 
 
@@ -12,7 +13,7 @@ class Settings(BaseSettings):
     DATE_FORMAT: str = "[%X]"
 
     class Config:
-        env_file = ".env"
+        env_file = _get_package_base_path("atria_hub") + "/.env"
         extra = "ignore"
 
 

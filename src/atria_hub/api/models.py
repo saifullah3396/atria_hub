@@ -10,6 +10,25 @@ if TYPE_CHECKING:
     from atriax_client.models.body_model_create import BodyModelCreate
     from atriax_client.models.model import Model
     from atriax_client.models.task_type import TaskType
+    from lakefs.branch import Branch
+
+
+class ModelNotFoundError(Exception):
+    """Custom exception for model not found errors."""
+
+    pass
+
+
+class ModelConfigNotFoundError(Exception):
+    """Custom exception for model configuration not found errors."""
+
+    pass
+
+
+class InvalidModelConfigError(Exception):
+    """Custom exception for invalid model configuration errors."""
+
+    pass
 
 
 class ModelsApi(BaseApi):
@@ -129,25 +148,48 @@ class ModelsApi(BaseApi):
         dir_ls = self._client.fs.ls(f"{dataset_repo_id}/{branch}/{configs_base_path}/")
         return [Path(x["name"]).name.replace(".yaml", "") for x in dir_ls]
 
+    def _load_checkpoint(self, branch: Branch, checkpoint_path: str) -> bytes:
+        from lakefs.exceptions import ObjectNotFoundException
+
+        try:
+            with branch.object(checkpoint_path).reader(pre_sign=True) as f:
+                return f.read()
+        except ObjectNotFoundException:
+            raise ModelNotFoundError("Model checkpoint not found.")
+
+    def _load_config(self, branch: Branch, config_path: str) -> dict:
+        import yaml
+        from lakefs.exceptions import ObjectNotFoundException
+
+        try:
+            with branch.object(config_path).reader(pre_sign=True) as f:
+                config = f.read().decode("utf-8")
+                config = yaml.load(config, Loader=yaml.Loader)  # unsafe load!!
+                if not isinstance(config, dict):
+                    raise InvalidModelConfigError(
+                        "The model configuration is not a valid dictionary. "
+                        "Please ensure the model was saved with the configuration."
+                    )
+                return config
+        except ObjectNotFoundException:
+            raise ModelConfigNotFoundError("Model configuration not found.")
+        except yaml.YAMLError:
+            raise InvalidModelConfigError("Failed to parse model configuration.")
+
     def load_checkpoint_and_config(
         self, model_repo_id: str, branch: str, config_name: str, configs_base_path: str
     ) -> tuple[bytes, dict]:
         import lakefs
-        import yaml
 
         """Download files from a model."""
         branch: lakefs.Branch = lakefs.repository(
             model_repo_id, client=self._client.lakefs_client
         ).branch(branch)
-        with branch.object(f"{config_name}/model.bin").reader(pre_sign=True) as f:
-            model = f.read()
-        with branch.object(f"{configs_base_path}/{config_name}.yaml").reader(
-            pre_sign=True
-        ) as f:
-            config = yaml.safe_load(f.read().decode("utf-8"))
-        if not isinstance(config, dict):
-            raise ValueError(
-                "The model configuration is not a valid dictionary. "
-                "Please ensure the model was saved with the configuration."
-            )
-        return model, config
+
+        checkpoint = self._load_checkpoint(
+            branch=branch, checkpoint_path=f"{config_name}/model.bin"
+        )
+        config = self._load_config(
+            branch=branch, config_path=f"{configs_base_path}/{config_name}.yaml"
+        )
+        return checkpoint, config

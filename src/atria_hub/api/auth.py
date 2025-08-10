@@ -48,7 +48,6 @@ class AuthApi(BaseApi):
                 email = input("Enter your email: ")
                 password = input("Enter your password: ")
 
-            logger.info(f"Signing in with email: {email}")
             self.sign_in(email=email, password=password)
 
     def sign_in(self, email: str, password: str) -> User:
