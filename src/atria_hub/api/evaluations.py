@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import uuid
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -19,15 +20,25 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 
+@dataclass
+class MetricData:
+    name: str
+    config_id: UUID
+    config_hash: str
+    data: dict[str, Any]
+
+
 class SampleExplanationsApi(BaseApi):
     @api_error_handler
     def write(
         self,
         evaluation_experiment_id: UUID,
-        explainer_name: str,
-        explainer_config: dict[str, Any],
+        name: str,
+        config_id: UUID,
+        config_hash: str,
         sample_index: int,
-        data: bytes,
+        explanation_metadata: dict[str, Any],
+        explanation_payload: bytes,
     ) -> None:
         """Write a sample result to an evaluation."""
         from atriax_client.api.sample_explanations import sample_explanations_write
@@ -40,11 +51,13 @@ class SampleExplanationsApi(BaseApi):
                 client=client,
                 evaluation_experiment_id=evaluation_experiment_id,
                 body=BodySampleExplanationsWrite(
+                    name=name,
                     sample_index=sample_index,
-                    explainer_name=explainer_name,
-                    config=json.dumps(explainer_config),
+                    config_id=config_id,
+                    config_hash=config_hash,
+                    explanation_metadata=json.dumps(explanation_metadata),
                     explanation_file=File(
-                        payload=io.BytesIO(data),
+                        payload=io.BytesIO(explanation_payload),
                         file_name="explanation.bin",
                         mime_type="application/octet-stream",
                     ),
@@ -52,15 +65,24 @@ class SampleExplanationsApi(BaseApi):
             )
 
     @api_error_handler
-    def read(self, evaluation_experiment_id: UUID, sample_index: int) -> list[dict]:
+    def read(
+        self,
+        evaluation_experiment_id: UUID,
+        sample_index: int,
+        config_id: UUID | None = None,
+    ) -> list[dict]:
         """Read a batch of sample results from an evaluation."""
         from atriax_client.api.sample_explanations import sample_explanations_read
 
         with self._client.protected_api_client as client:
+            kwargs = {}
+            if config_id is not None:
+                kwargs["config_id"] = config_id
             return sample_explanations_read.sync_detailed(
                 client=client,
                 evaluation_experiment_id=evaluation_experiment_id,
                 sample_index=sample_index,
+                **kwargs,
             )
 
 
@@ -69,7 +91,12 @@ class SampleExplanationMetricsApi(BaseApi):
         self._client = client
 
     @api_error_handler
-    def write(self, evaluation_experiment_id: UUID, metrics: dict[str, Any]) -> None:
+    def write(
+        self,
+        evaluation_experiment_id: UUID,
+        sample_explanation_id: UUID,
+        metric_data: list[MetricData],
+    ) -> None:
         """Write a sample result to an evaluation."""
         from atriax_client.api.sample_explanation_metrics import (
             sample_explanation_metrics_write,
@@ -77,30 +104,46 @@ class SampleExplanationMetricsApi(BaseApi):
         from atriax_client.models.sample_explanation_metric_create import (
             SampleExplanationMetricCreate,
         )
+        from atriax_client.models.sample_explanation_metric_create_data import (
+            SampleExplanationMetricCreateData,
+        )
 
-        logger.info("metrics %s", metrics)
         with self._client.protected_api_client as client:
             return sample_explanation_metrics_write.sync_detailed(
                 client=client,
                 evaluation_experiment_id=evaluation_experiment_id,
                 body=[
                     SampleExplanationMetricCreate(
-                        key=key,
-                        value=SampleExplanationMetricCreateValue(**value),
-                        config=config,
+                        name=d.name,
+                        config_id=d.config_id,
+                        config_hash=d.config_hash,
+                        data=SampleExplanationMetricCreateData.from_dict(d.data),
                     )
-                    for key, value in metrics.items()
+                    for d in metric_data
                 ],
+                sample_explanation_id=sample_explanation_id,
             )
 
     @api_error_handler
-    def read(self, evaluation_experiment_id: UUID) -> list[dict]:
+    def read(
+        self,
+        evaluation_experiment_id: UUID,
+        sample_index: int,
+        sample_explanation_id: UUID | None = None,
+        config_id: UUID | None = None,
+    ) -> list[dict]:
         """Read a batch of sample results from an evaluation."""
-        from atriax_client.api.metrics import metrics_read
+        from atriax_client.api.sample_explanation_metrics import (
+            sample_explanation_metrics_read,
+        )
 
         with self._client.protected_api_client as client:
-            return metrics_read.sync_detailed(
-                client=client, evaluation_experiment_id=evaluation_experiment_id
+            return sample_explanation_metrics_read.sync_detailed(
+                client=client,
+                evaluation_experiment_id=evaluation_experiment_id,
+                sample_explanation_id=sample_explanation_id,
+                config_id=config_id,
+                sample_index=sample_index,
             )
 
 

@@ -2,18 +2,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from atria_hub.api.evaluations import EvaluationsApi
-from atria_hub.api.tasks import TasksApi
 from atria_hub.config import settings
-from atria_hub.models import AuthLoginModel
 from atria_hub.utilities import get_logger
 
 if TYPE_CHECKING:
     from atria_hub.api.auth import AuthApi
+    from atria_hub.api.config_snapshots import ConfigSnapshotsApi
     from atria_hub.api.datasets import DatasetsApi
+    from atria_hub.api.evaluations import EvaluationsApi
     from atria_hub.api.health_check import HealthCheckApi
     from atria_hub.api.models import ModelsApi
+    from atria_hub.api.tasks import TasksApi
     from atria_hub.client import AtriaHubClient
+    from atria_hub.models import AuthLoginModel
 
 logger = get_logger(__name__)
 
@@ -23,15 +24,17 @@ class AtriaHub:
         self,
         base_url: str = settings.ATRIAX_URL,
         storage_url: str = settings.ATRIAX_STORAGE_URL,
-        anon_api_key: str = settings.ATRIAX_ANON_KEY,
         service_name: str = "atria",
         use_key_ring: bool = True,
     ):
         from atria_hub.api.auth import AuthApi
+        from atria_hub.api.config_snapshots import ConfigSnapshotsApi
         from atria_hub.api.credentials import RepoCredentialsApi
         from atria_hub.api.datasets import DatasetsApi
+        from atria_hub.api.evaluations import EvaluationsApi
         from atria_hub.api.health_check import HealthCheckApi
         from atria_hub.api.models import ModelsApi
+        from atria_hub.api.tasks import TasksApi
         from atria_hub.client import AtriaHubClient
 
         self._base_url = base_url
@@ -39,7 +42,6 @@ class AtriaHub:
         self._client = AtriaHubClient(
             base_url=base_url,
             storage_url=storage_url,
-            anon_api_key=anon_api_key,
             service_name=service_name,
             use_key_ring=use_key_ring,
         )
@@ -61,6 +63,9 @@ class AtriaHub:
         # tasks api
         self._tasks = TasksApi(client=self._client)
 
+        # config snapshot api
+        self._config_snapshots = ConfigSnapshotsApi(client=self._client)
+
         # evaluation APIs
         self._evaluations = EvaluationsApi(client=self._client)
 
@@ -81,7 +86,6 @@ class AtriaHub:
             password=credentials.password if credentials is not None else None,
             force_sign_in=force_sign_in,
         )
-        self._client.set_auth_headers(self.get_auth_headers())
         self._storage_credentials = self._repo_credentials.get_or_create()
         self._client.set_repos_access_credentials(self._storage_credentials)
         return self
@@ -95,13 +99,6 @@ class AtriaHub:
             "AWS_ALLOW_HTTP": "true",
             "AWS_S3_ALLOW_UNSAFE_RENAME": "true",
         }
-
-    def get_auth_headers(self) -> dict[str, str]:
-        """Return headers using the Supabase session token."""
-        session = self._auth_api.get_session()
-        if not session:
-            raise RuntimeError("No active session. Please authenticate.")
-        return {"Authorization": f"Bearer {session.access_token}"}
 
     @property
     def client(self) -> AtriaHubClient:
@@ -137,3 +134,8 @@ class AtriaHub:
     def evaluations(self) -> EvaluationsApi:
         """Return the evaluations API."""
         return self._evaluations
+
+    @property
+    def config_snapshots(self) -> ConfigSnapshotsApi:
+        """Return the config snapshots API."""
+        return self._config_snapshots

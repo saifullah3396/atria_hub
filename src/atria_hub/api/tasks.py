@@ -15,10 +15,10 @@ class TasksApi(BaseApi):
     def get(self, id: uuid.UUID) -> Task:
         """Retrieve a task from the hub by its name."""
 
-        from atriax_client.api.task import task_item
+        from atriax_client.api.tasks import tasks_item
 
         with self._client.protected_api_client as client:
-            response = task_item.sync_detailed(id, client=client)
+            response = tasks_item.sync_detailed(id, client=client)
             if response.status_code != 200:
                 raise RuntimeError(
                     f"Failed to get task: {response.status_code} - {response.content.decode('utf-8')}"
@@ -27,10 +27,10 @@ class TasksApi(BaseApi):
 
     def list(self):
         """List all tasks in the hub."""
-        from atriax_client.api.task import task_list
+        from atriax_client.api.tasks import tasks_list
 
         with self._client.protected_api_client as client:
-            response = task_list.sync_detailed(client=client)
+            response = tasks_list.sync_detailed(client=client)
             if response.status_code != 200:
                 raise RuntimeError(
                     f"Failed to list tasks: {response.status_code} - {response.content.decode('utf-8')}"
@@ -40,10 +40,10 @@ class TasksApi(BaseApi):
     def update(self, id: uuid.UUID, body: TaskUpdate) -> Task:
         """Update a task in the hub."""
 
-        from atriax_client.api.task import task_update
+        from atriax_client.api.tasks import tasks_update
 
         with self._client.protected_api_client as client:
-            response = task_update.sync_detailed(id=id, body=body, client=client)
+            response = tasks_update.sync_detailed(id=id, body=body, client=client)
             if response.status_code != 200:
                 raise RuntimeError(
                     f"Failed to update task: {response.status_code} - {response.content.decode('utf-8')}"
@@ -53,10 +53,10 @@ class TasksApi(BaseApi):
     def delete(self, id: uuid.UUID) -> None:
         """Delete a task from the hub."""
 
-        from atriax_client.api.task import task_delete
+        from atriax_client.api.tasks import tasks_delete
 
         with self._client.protected_api_client as client:
-            response = task_delete.sync_detailed(id=id, client=client)
+            response = tasks_delete.sync_detailed(id=id, client=client)
             if response.status_code != 204:
                 raise RuntimeError(
                     f"Failed to delete task: {response.status_code} - {response.content.decode('utf-8')}"

@@ -26,7 +26,6 @@ class AtriaHubClient:
         self,
         base_url: str = settings.ATRIAX_URL,
         storage_url: str = settings.ATRIAX_STORAGE_URL,
-        anon_api_key: str = settings.ATRIAX_ANON_KEY,
         service_name: str = "atria",
         use_key_ring: bool = True,
     ):
@@ -38,13 +37,12 @@ class AtriaHubClient:
         self._base_url = base_url
         self._storage_url = storage_url
         self._service_name = service_name
-        self._anon_api_key = anon_api_key
         self._auth_headers: dict[str, str] = {}
         self._credentials_storage = CredentialsStorage(service_name)
         self._api_client = AtriaxClient(base_url=base_url)
         self._auth_client: AuthClient = create_client(
             supabase_url=base_url,
-            supabase_key=anon_api_key,
+            supabase_key="",
             options=ClientOptions(storage=self._credentials_storage)
             if use_key_ring
             else None,
@@ -66,7 +64,7 @@ class AtriaHubClient:
     def protected_api_client(self) -> AuthenticatedAtriaxClient:
         """Return the HTTP client for REST API calls."""
         return self._api_client.with_headers(
-            {"apiKey": self._anon_api_key, **self._auth_headers}
+            {"apiKey": self._anon_api_key, **self.get_auth_headers()}
         )
 
     @property
@@ -96,11 +94,14 @@ class AtriaHubClient:
             self._lakefs_fs.client = self._lakefs_client
         return self._lakefs_fs
 
-    def set_auth_headers(self, auth_headers: dict[str, str]):
-        """Set the credentials in the storage."""
-        self._auth_headers = auth_headers
-
     def set_repos_access_credentials(self, credentials: ReposCredentials):
         """Set the credentials in the storage."""
         self.lakefs_client._conf.username = credentials.access_key_id
         self.lakefs_client._conf.password = credentials.secret_access_key
+
+    def get_auth_headers(self) -> dict[str, str]:
+        """Return headers using the Supabase session token."""
+        session = self._auth_client.auth.get_session()
+        if not session:
+            raise RuntimeError("No active session. Please authenticate.")
+        return {"Authorization": f"Bearer {session.access_token}"}

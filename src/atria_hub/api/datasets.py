@@ -118,6 +118,8 @@ class DatasetsApi(BaseApi):
         dataset_files: list[tuple[str, str]],
         overwrite_existing: bool = False,
     ) -> None:
+        import mimetypes
+
         import lakefs
         import tqdm
 
@@ -151,10 +153,16 @@ class DatasetsApi(BaseApi):
             f"Files to be uploaded:\n{pretty_repr(dataset_files, max_length=4)}"
         )
         for file in tqdm.tqdm(dataset_files, desc="Uploading"):
+            # if it is a yaml file, we need to set the content type
             src, file_tgt = file
 
             # this is slow but for now it works, in future we could use s3 gateway with async boto3 client instead
-            self._client.fs.put_file(lpath=src, rpath=f"{tgt}{file_tgt}", precheck=True)
+            self._client.fs.put_file(
+                lpath=src,
+                rpath=f"{tgt}{file_tgt}",
+                precheck=True,
+                content_type=mimetypes.guess_type(src),
+            )
 
     def download_files(
         self, dataset_repo_id: str, branch: str, config_dir: str, destination_path: str

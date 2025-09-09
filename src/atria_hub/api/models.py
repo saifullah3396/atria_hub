@@ -10,7 +10,6 @@ if TYPE_CHECKING:
     from atriax_client.models.body_model_create import BodyModelCreate
     from atriax_client.models.model import Model
     from atriax_client.models.task_type import TaskType
-    from lakefs.branch import Branch
 
 
 class ModelNotFoundError(Exception):
@@ -107,6 +106,7 @@ class ModelsApi(BaseApi):
         configs_base_path: str,
         model_checkpoint: bytes,
         model_config: dict,
+        dataset_metadata: dict,
         overwrite_existing: bool = False,
     ) -> Model:
         import lakefs
@@ -134,9 +134,16 @@ class ModelsApi(BaseApi):
             model.repo_id, client=self._client.lakefs_client
         ).branch(branch)
         branch.create(model.default_branch, exist_ok=True)
-        branch.object(f"{config_name}/model.bin").upload(model_checkpoint)
+        branch.object(f"{config_name}/model.bin").upload(
+            model_checkpoint, content_type="application/octet-stream"
+        )
+        branch.object(f"{config_name}/dataset_metadata.yaml").upload(
+            yaml.dump(dataset_metadata, sort_keys=False).encode("utf-8"),
+            content_type="application/x-yaml",
+        )
         branch.object(f"{configs_base_path}/{config_name}.yaml").upload(
-            yaml.dump(model_config, sort_keys=False).encode("utf-8")
+            yaml.dump(model_config, sort_keys=False).encode("utf-8"),
+            content_type="application/x-yaml",
         )
 
     def get_available_configs(
@@ -148,21 +155,62 @@ class ModelsApi(BaseApi):
         dir_ls = self._client.fs.ls(f"{dataset_repo_id}/{branch}/{configs_base_path}/")
         return [Path(x["name"]).name.replace(".yaml", "") for x in dir_ls]
 
-    def _load_checkpoint(self, branch: Branch, checkpoint_path: str) -> bytes:
+    def load_checkpoint(
+        self, model_repo_id: str, branch: str, config_name: str
+    ) -> bytes:
+        import lakefs
         from lakefs.exceptions import ObjectNotFoundException
 
         try:
-            with branch.object(checkpoint_path).reader(pre_sign=True) as f:
+            branch: lakefs.Branch = lakefs.repository(
+                model_repo_id, client=self._client.lakefs_client
+            ).branch(branch)
+            with branch.object(f"{config_name}/model.bin").reader(pre_sign=True) as f:
                 return f.read()
         except ObjectNotFoundException:
             raise ModelNotFoundError("Model checkpoint not found.")
 
-    def _load_config(self, branch: Branch, config_path: str) -> dict:
+    def load_config(
+        self, model_repo_id: str, branch: str, config_name: str, configs_base_path: str
+    ) -> bytes:
+        import lakefs
         import yaml
         from lakefs.exceptions import ObjectNotFoundException
 
         try:
-            with branch.object(config_path).reader(pre_sign=True) as f:
+            branch: lakefs.Branch = lakefs.repository(
+                model_repo_id, client=self._client.lakefs_client
+            ).branch(branch)
+            with branch.object(f"{configs_base_path}/{config_name}.yaml").reader(
+                pre_sign=True
+            ) as f:
+                config = f.read().decode("utf-8")
+                config = yaml.load(config, Loader=yaml.Loader)  # unsafe load!!
+                if not isinstance(config, dict):
+                    raise InvalidModelConfigError(
+                        "The model configuration is not a valid dictionary. "
+                        "Please ensure the model was saved with the configuration."
+                    )
+                return config
+        except ObjectNotFoundException:
+            raise ModelConfigNotFoundError("Model configuration not found.")
+        except yaml.YAMLError:
+            raise InvalidModelConfigError("Failed to parse model configuration.")
+
+    def load_dataset_metadata(
+        self, model_repo_id: str, branch: str, config_name: str
+    ) -> bytes:
+        import lakefs
+        import yaml
+        from lakefs.exceptions import ObjectNotFoundException
+
+        try:
+            branch: lakefs.Branch = lakefs.repository(
+                model_repo_id, client=self._client.lakefs_client
+            ).branch(branch)
+            with branch.object(f"{config_name}/dataset_metadata.yaml").reader(
+                pre_sign=True
+            ) as f:
                 config = f.read().decode("utf-8")
                 config = yaml.load(config, Loader=yaml.Loader)  # unsafe load!!
                 if not isinstance(config, dict):
@@ -179,17 +227,13 @@ class ModelsApi(BaseApi):
     def load_checkpoint_and_config(
         self, model_repo_id: str, branch: str, config_name: str, configs_base_path: str
     ) -> tuple[bytes, dict]:
-        import lakefs
-
-        """Download files from a model."""
-        branch: lakefs.Branch = lakefs.repository(
-            model_repo_id, client=self._client.lakefs_client
-        ).branch(branch)
-
-        checkpoint = self._load_checkpoint(
-            branch=branch, checkpoint_path=f"{config_name}/model.bin"
+        checkpoint = self.load_checkpoint(
+            model_repo_id=model_repo_id, branch=branch, config_name=config_name
         )
-        config = self._load_config(
-            branch=branch, config_path=f"{configs_base_path}/{config_name}.yaml"
+        config = self.load_config(
+            model_repo_id=model_repo_id,
+            branch=branch,
+            config_name=config_name,
+            configs_base_path=configs_base_path,
         )
         return checkpoint, config

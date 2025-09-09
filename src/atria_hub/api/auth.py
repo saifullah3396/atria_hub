@@ -1,6 +1,7 @@
+from gotrue.types import User
+
 from atria_hub.api.base import BaseApi
 from atria_hub.utilities import get_logger
-from gotrue.types import User
 
 logger = get_logger(__name__)
 

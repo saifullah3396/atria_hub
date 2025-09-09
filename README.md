@@ -161,7 +161,6 @@ pytest --cov=src/atria_hub
 The library uses environment-based configuration. Key settings include:
 
 - `ATRIAX_URL`: Base URL for the Atriax Hub API
-- `ATRIAX_ANON_KEY`: Anonymous API key for public access
 
 Configuration is managed through the `atria_hub.config.settings` module.
 
