@@ -42,7 +42,7 @@ class AtriaHubClient:
         self._api_client = AtriaxClient(base_url=base_url)
         self._auth_client: AuthClient = create_client(
             supabase_url=base_url,
-            supabase_key="",
+            supabase_key="dummy-key",
             options=ClientOptions(storage=self._credentials_storage)
             if use_key_ring
             else None,
@@ -58,14 +58,12 @@ class AtriaHubClient:
     @property
     def api_client(self) -> AtriaxClient:
         """Return the HTTP client for REST API calls."""
-        return self._api_client.with_headers({"apiKey": self._anon_api_key})
+        return self._api_client
 
     @property
     def protected_api_client(self) -> AuthenticatedAtriaxClient:
         """Return the HTTP client for REST API calls."""
-        return self._api_client.with_headers(
-            {"apiKey": self._anon_api_key, **self.get_auth_headers()}
-        )
+        return self._api_client.with_headers({**self.get_auth_headers()})
 
     @property
     def auth_client(self) -> SupabaseClient:
@@ -79,9 +77,6 @@ class AtriaHubClient:
 
         if self._lakefs_client is None:
             self._lakefs_client = LakeFSClient(host=self._storage_url)
-            self._lakefs_client._client._api.set_default_header(
-                "apiKey", self._anon_api_key
-            )
         return self._lakefs_client
 
     @cached_property

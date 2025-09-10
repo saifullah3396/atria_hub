@@ -150,18 +150,24 @@ class DatasetsApi(BaseApi):
         from rich.pretty import pretty_repr
 
         logger.info(
-            f"Files to be uploaded:\n{pretty_repr(dataset_files, max_length=4)}"
+            f"Files to be uploaded:\n{pretty_repr(dataset_files, max_length=4)}, dataset.repo_id={dataset.repo_id}, branch={branch}, config_dir={config_dir}"
         )
         for file in tqdm.tqdm(dataset_files, desc="Uploading"):
             # if it is a yaml file, we need to set the content type
             src, file_tgt = file
 
+            content_type = mimetypes.guess_type(src)
+            if content_type is None:
+                content_type = "application/octet-stream"
+            else:
+                content_type = content_type[0]
+
             # this is slow but for now it works, in future we could use s3 gateway with async boto3 client instead
             self._client.fs.put_file(
                 lpath=src,
                 rpath=f"{tgt}{file_tgt}",
-                precheck=True,
-                content_type=mimetypes.guess_type(src),
+                precheck=False,
+                content_type=content_type,
             )
 
     def download_files(
