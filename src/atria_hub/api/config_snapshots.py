@@ -7,11 +7,11 @@ from atria_hub.api.base import BaseApi
 if TYPE_CHECKING:
     import uuid
 
-    from atriax_client.models.config_snapshot import ConfigSnapshot
+    from atriax_client.models.config import Config
 
 
 class ConfigSnapshotsApi(BaseApi):
-    def get(self, id: uuid.UUID) -> ConfigSnapshot:
+    def get(self, id: uuid.UUID) -> Config:
         """Retrieve a config_snapshot from the hub by its name."""
 
         from atriax_client.api.config_snapshots import config_snapshots_item
@@ -22,6 +22,7 @@ class ConfigSnapshotsApi(BaseApi):
                 raise RuntimeError(
                     f"Failed to get config_snapshot: {response.status_code} - {response.content.decode('utf-8')}"
                 )
+            print("response", response, response.parsed, flush=True)
             return response.parsed
 
     def delete(self, id: uuid.UUID) -> None:

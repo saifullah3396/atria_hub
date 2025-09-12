@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from atria_core.logger.logger import get_logger
+from atriax_client.models.config_base import ConfigBase
 from atriax_client.types import File
 
 from atria_hub.api.base import BaseApi
@@ -23,8 +24,7 @@ logger = get_logger(__name__)
 @dataclass
 class MetricData:
     name: str
-    config_id: UUID
-    config_hash: str
+    config: ConfigBase
     data: dict[str, Any]
 
 
@@ -34,8 +34,7 @@ class SampleExplanationsApi(BaseApi):
         self,
         evaluation_experiment_id: UUID,
         name: str,
-        config_id: UUID,
-        config_hash: str,
+        config: ConfigBase,
         sample_index: int,
         explanation_metadata: dict[str, Any],
         explanation_payload: bytes,
@@ -46,6 +45,7 @@ class SampleExplanationsApi(BaseApi):
             BodySampleExplanationsWrite,
         )
 
+        print("config", type(config), flush=True)
         with self._client.protected_api_client as client:
             return sample_explanations_write.sync_detailed(
                 client=client,
@@ -53,8 +53,7 @@ class SampleExplanationsApi(BaseApi):
                 body=BodySampleExplanationsWrite(
                     name=name,
                     sample_index=sample_index,
-                    config_id=config_id,
-                    config_hash=config_hash,
+                    config=config,
                     explanation_metadata=json.dumps(explanation_metadata),
                     explanation_file=File(
                         payload=io.BytesIO(explanation_payload),
@@ -115,8 +114,7 @@ class SampleExplanationMetricsApi(BaseApi):
                 body=[
                     SampleExplanationMetricCreate(
                         name=d.name,
-                        config_id=d.config_id,
-                        config_hash=d.config_hash,
+                        config=d.config,
                         data=SampleExplanationMetricCreateData.from_dict(d.data),
                     )
                     for d in metric_data
